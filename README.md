@@ -8,6 +8,7 @@
 - 图片：`/admin` 选图上传 `R2`，自动压 webp（长边 1600）并插到光标处
 - 预览：`/admin` 写/预览切换；鉴权：`/admin*` 需登录（`ADMIN_PASSWORD`），其余公开
 - 订阅：`/rss.xml` `/feed`；渲染：标题、列表、任务列表、代码块、引用、图片、表格
+- PWA：`/manifest.webmanifest` + `/sw.js`，手机浏览器打开可“安装到主屏幕”，页面与图片离线可读（图标在 R2 `pwa/`，源文件在 `icons/`）
 - App：原生安卓端在 `diary-android/` 目录，对接 `/api/*`
 
 ## 本地
@@ -40,6 +41,7 @@ scripts/backup.mjs            # 本地备份
 .github/workflows/backup.yml  # 云端备份
 wrangler.toml                 # Worker + D1 + R2
 seed.sql                      # 示例数据
+icons/                        # PWA 图标源文件（已上传 R2 pwa/）
 ```
 
 改样式：编辑 `src/index.ts` 的 `css`，`pnpm dev` 看效果。
