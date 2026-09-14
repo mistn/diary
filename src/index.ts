@@ -14,12 +14,14 @@ app.use('*', async (c, next) => {
 const css = `*{margin:0;padding:0;box-sizing:border-box}html{scrollbar-gutter:stable}body{font-family:"Noto Serif SC","Songti SC",serif;background:#fff;color:#1a1a1a;max-width:700px;margin:0 auto;padding:32px 18px;line-height:1.9;letter-spacing:.02em}header{border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:baseline}header a{color:#111;text-decoration:none}header h1{font-size:21px;letter-spacing:.08em}nav a{font-size:13px;margin-left:14px;text-decoration:underline;text-underline-offset:3px}article{padding:12px 0;border:none}article h2{font-size:17px;margin:4px 0}time{font-size:12px;color:#999;letter-spacing:.04em}.md{font-size:15px;line-height:2;color:#222}.md h1{font-size:22px;margin:24px 0 12px;border-bottom:1px solid #eee;padding-bottom:8px}.md h2{font-size:19px;margin:22px 0 10px}.md h3{font-size:16px;margin:18px 0 8px}.md p{margin:14px 0}.md li{margin:6px 0 6px 20px}.md li:has(input[type="checkbox"]){list-style:none;margin-left:0}.md li input[type="checkbox"]{margin-right:6px;vertical-align:middle;width:auto}.md a{color:#1a1a1a;text-decoration:underline;text-underline-offset:3px}.md code{background:#f6f6f6;padding:2px 5px;font-size:13px;border-radius:3px}.md pre{background:#f6f6f6;padding:14px;overflow:auto;border-radius:6px;line-height:1.6}.md pre code{background:none;padding:0}.md img{max-width:100%;border-radius:4px;margin:12px 0}.md blockquote{border-left:3px solid #111;padding:6px 14px;margin:14px 0;color:#555;background:#fafafa}.md hr{border:none;border-top:1px solid #eee;margin:20px 0}form{display:flex;flex-direction:column;gap:14px;max-width:100%}label{display:flex;flex-direction:column;gap:6px;font-size:13px}input:not([type="checkbox"]),textarea{border:1px solid #bbb;padding:10px;font:inherit;width:100%;border-radius:4px}input[type="checkbox"]{width:auto;accent-color:#111}textarea{min-height:420px;resize:vertical}button{border:1px solid #111;background:#fff;color:#111;padding:8px 20px;cursor:pointer;align-self:flex-start;border-radius:4px}button:hover{background:#111;color:#fff}.md table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px;line-height:1.7;display:block;overflow-x:auto;white-space:nowrap}.md th,.md td{border-bottom:1px solid #eee;padding:8px 10px;text-align:left}.md th{border-bottom:2px solid #111;white-space:nowrap}.md td{color:#333}`
 
 const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+const renderMd = async (md: string) => String(await marked.parse(md)).replace(/<img /g, '<img loading="lazy" decoding="async" ')
 const layout = (title: string, body: string) => `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(title)}</title><link rel="alternate" type="application/rss+xml" title="日记 RSS" href="/rss.xml"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#ffffff"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="apple-touch-icon" href="/img/pwa/apple-touch-icon.png"><style>${css}</style><header><h1><a href="/">日记</a></h1><nav><a href="/">首页</a><a href="/admin">写</a><a href="/rss.xml">RSS</a></nav></header><main>${body}</main><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}</script>`
 
 const ensure = async (db: D1Database) => {
   await db.prepare(`CREATE TABLE IF NOT EXISTS entries (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL, date TEXT NOT NULL, kind TEXT DEFAULT 'diary', visible INTEGER DEFAULT 1)`).run()
   try { await db.prepare(`ALTER TABLE entries ADD COLUMN kind TEXT DEFAULT 'diary'`).run() } catch {}
   try { await db.prepare(`ALTER TABLE entries ADD COLUMN visible INTEGER DEFAULT 1`).run() } catch {}
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_entries_date_id ON entries(date DESC, id DESC)`).run()
 }
 
 const getCookie = (c: any, k: string) => (c.req.header('Cookie') || '').split('; ').find((x: string) => x.startsWith(k + '='))?.split('=')[1] || ''
@@ -54,19 +56,32 @@ app.use('/admin*', async (c, next) => {
   return c.redirect('/login')
 })
 
+const PAGE_SIZE = 20
+
 app.get('/', async c => {
   await ensure(c.env.DB)
   const admin = isAuth(c)
-  const { results } = await c.env.DB.prepare(`SELECT * FROM entries ORDER BY date DESC, id DESC`).all()
-  const items = (results as any[]).filter(r => r.visible || admin)
+  const before = Number(c.req.query('before') || 0)
+  const q = Number.isFinite(before) && before > 0
+    ? c.env.DB.prepare(`SELECT * FROM entries WHERE id < ? ORDER BY date DESC, id DESC LIMIT ?`).bind(before, PAGE_SIZE + 1)
+    : c.env.DB.prepare(`SELECT * FROM entries ORDER BY date DESC, id DESC LIMIT ?`).bind(PAGE_SIZE + 1)
+  const { results } = await q.all()
+  const rows = (results as any[]) || []
+  const hasMore = rows.length > PAGE_SIZE
+  const page = rows.slice(0, PAGE_SIZE)
+  const items = page.filter(r => r.visible || admin)
   const body = (await Promise.all(items.map(async r => {
-    const html = await marked.parse(r.content)
+    const html = await renderMd(r.content)
     const ctl = admin ? `<p style="font-size:13px"><a href="/admin/edit/${r.id}">编辑</a> · <a href="/w/${r.id}">详情</a></p>` : ``
     const showTitle = r.title && r.title !== r.date
     const head = showTitle ? `<h2>${esc(r.title)}${r.visible ? '' : '（私密）'}</h2>` : (r.visible ? '' : `<p style="font-size:12px;color:#999">私密</p>`)
     return `<article><time>${esc(r.date)}</time>${head}<div class="md">${html}</div>${ctl}</article>`
-  }))).join('') || `<p>还没有日记，<a href="/admin">写第一篇</a></p>`
-  return c.html(layout('日记', body))
+  }))).join('')
+  const more = hasMore ? `<p style="margin-top:20px"><a href="/?before=${page[page.length - 1].id}">更早的日记 →</a></p>` : ``
+  const empty = Number.isFinite(before) && before > 0
+    ? `<p>没有更早的日记了，<a href="/">回首页</a></p>`
+    : `<p>还没有日记，<a href="/admin">写第一篇</a></p>`
+  return c.html(layout('日记', body + more || empty))
 })
 
 app.get('/d', c => c.redirect('/', 302))
@@ -78,7 +93,7 @@ app.get('/w/:id', async c => {
   if (!r) return c.notFound()
   const isAdmin = isAuth(c)
   if (!r.visible && !isAdmin) return c.notFound()
-  const html = await marked.parse(r.content)
+  const html = await renderMd(r.content)
   const admin = isAdmin ? `<p style="margin-top:16px;font-size:13px"><a href="/admin/edit/${r.id}">编辑</a><span style="margin:0 8px;color:#ccc">·</span><form method="post" action="/admin/delete/${r.id}" style="display:inline" onsubmit="return confirm('删除?')"><button style="background:none;border:none;color:#999;text-decoration:underline;cursor:pointer;padding:0;font:inherit;font-size:13px">删除</button></form></p>` : ``
   const showTitle = r.title && r.title !== r.date
   return c.html(layout(r.title || r.date || '日记', `<article><time>${esc(r.date)}</time>${showTitle ? `<h2>${esc(r.title)}</h2>` : ''}${r.visible ? '' : `<p style="font-size:12px;color:#999">仅自己可见</p>`}<div class="md">${html}</div>${admin}</article><p><a href="/">← 返回</a></p>`))
@@ -187,7 +202,7 @@ app.post('/admin/preview', async c => {
   if (!isAuth(c)) return c.text('unauthorized', 401)
   const b: any = await c.req.json().catch(async () => await c.req.parseBody())
   const md = String(b.content ?? b.md ?? '')
-  const html = await marked.parse(md)
+  const html = await renderMd(md)
   return c.html(String(html))
 })
 
@@ -330,7 +345,7 @@ const rss = async (db: D1Database, url: string) => {
   const items = (await Promise.all((results as any[]).map(async r => {
     const link = `${url}/w/${r.id}`
     const pub = new Date(r.date).toUTCString()
-    const body = String(await marked.parse(r.content)).replaceAll('src="/', `src="${url}/`).replaceAll('href="/', `href="${url}/`).replaceAll(']]>', ']]&gt;')
+    const body = (await renderMd(r.content)).replaceAll('src="/', `src="${url}/`).replaceAll('href="/', `href="${url}/`).replaceAll(']]>', ']]&gt;')
     return `<item><title>${esc(r.title || r.date)}</title><link>${link}</link><guid>${link}</guid><pubDate>${pub}</pubDate><description><![CDATA[${body}]]></description></item>`
   }))).join('')
   return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>日记</title><link>${url}</link><description>diary</description>${items}</channel></rss>`
