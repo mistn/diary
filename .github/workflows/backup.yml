@@ -45,7 +45,7 @@ jobs:
             (grep -oE '/img/[0-9A-Za-z_./-]+' weekly.sql || true) | sort -u | while read -r p; do
               key="${p#/img/}"
               mkdir -p "img/$(dirname "$key")"
-              wrangler r2 object get "weekly-img/$key" --file "img/$key"
+              wrangler r2 object get "diary-img/$key" --file "img/$key"
             done
           fi
 

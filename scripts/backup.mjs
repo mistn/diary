@@ -21,7 +21,7 @@ console.log('2/2 下载 R2 ...')
 for (const key of keys) {
   const dest = path.join(dir, 'img', ...key.split('/'))
   mkdirSync(path.dirname(dest), { recursive: true })
-  run(`npx wrangler r2 object get "weekly-img/${key}" --file "${dest}"`)
+  run(`npx wrangler r2 object get "diary-img/${key}" --file "${dest}"`)
 }
 
 console.log(`完成：${dir}（weekly.sql + img/）`)
