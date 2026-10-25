@@ -10,7 +10,9 @@
 - 预览：`/admin` 写/预览切换；鉴权：`/admin*` 需登录（`ADMIN_PASSWORD`），登录限速（同 IP 10 分钟错 5 次锁 10 分钟），Markdown 输出经 sanitize-html 消毒；其余公开
 - 订阅：`/rss.xml` `/feed`；渲染：标题、列表、任务列表、代码块、引用、图片、表格
 - 统计：配置 secret `CF_ANALYTICS_TOKEN` 后自动挂 Cloudflare Web Analytics，不配则无
-- PWA：`/manifest.webmanifest` + `/sw.js`，手机浏览器打开可“安装到主屏幕”，页面与图片离线可读（图标在 R2 `pwa/`，源文件在 `icons/`）
+- PWA：`/manifest.webmanifest` + `/sw.js`，手机浏览器打开可“安装到主屏幕”，页面与图片离线可读（图标在 R2 `pwa/`，源文件在 `icons/`，`node gen-icons.cjs <头像路径>` 可再生成）
+- 图标：favicon 与 PWA 图标为 Happy Sugar Life 头像；`/favicon.ico` 由 Worker 直出 `pwa/favicon-32.png`
+- 留言：`/guestbook` 访客留言板（公开即显；Turnstile 人机验证 + 同 IP 60 秒 1 条 / 24 小时 10 条限速 + 蜜罐字段，IP 只存哈希），管理员可删
 - 主题：黑白极简 + Happy Sugar Life 品牌粉点缀（暗色用原色 `#ee72b2`，浅色链接用加深版 `#d63384` 保证白底可读）；网格底纹、底部微光、列表渐入、胶囊按钮等动效与氛围均参考 `dp-intro-vue`
 - App：原生安卓端在 `diary-android/` 目录，对接 `/api/*`
 
