@@ -1,5 +1,5 @@
-// 用 www 头像生成全套站点图标：192/512/maskable-512/apple-touch-180/favicon-32
-// 用法：node gen-icons.js <avatar路径>
+// 用 www 头像生成全套站点图标到 public/pwa/（静态资源随部署走）
+// 用法：node gen-icons.cjs <avatar路径>
 const path = require('path')
 const fs = require('fs')
 
@@ -14,7 +14,7 @@ try {
   process.exit(2)
 }
 
-const out = path.join(__dirname, 'icons')
+const out = path.join(__dirname, 'public', 'pwa')
 fs.mkdirSync(out, { recursive: true })
 
 const square = async (size, name) => {
@@ -37,4 +37,6 @@ const maskable = async () => {
   await square(180, 'apple-touch-icon.png')
   await square(32, 'favicon-32.png')
   await maskable()
+  fs.copyFileSync(path.join(out, 'favicon-32.png'), path.join(__dirname, 'public', 'favicon.ico'))
+  console.log('OK favicon.ico')
 })()

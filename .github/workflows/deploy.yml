@@ -58,16 +58,6 @@ jobs:
           TURNSTILE_SECRET: ${{ secrets.TURNSTILE_SECRET }}
         run: printf '%s' "$TURNSTILE_SECRET" | wrangler secret put TURNSTILE_SECRET
 
-      - name: 同步 PWA 图标到 R2
-        continue-on-error: true # 需要 token 有 R2 编辑权限（Cloudflare → API 令牌 → 该令牌 → 添加：帐户 / Worker R2 Storage / 编辑）；没有则跳过，不影响部署
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          for f in icon-192.png icon-512.png icon-maskable-512.png apple-touch-icon.png favicon-32.png; do
-            npx wrangler r2 object put "diary-img/pwa/$f" --file "icons/$f" --remote --content-type image/png
-          done
-
       - name: 同步 Web Analytics（可选，未配置则跳过）
         if: env.CF_ANALYTICS_TOKEN != ''
         env:
