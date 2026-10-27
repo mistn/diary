@@ -6,7 +6,8 @@ import path from 'node:path'
 
 const run = (cmd) => execSync(cmd, { stdio: 'inherit', shell: true })
 
-const stamp = new Date().toISOString().slice(0, 10)
+// 目录名用北京时间，避免早上 8 点前备份落到前一天
+const stamp = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10)
 const dir = path.join('backup', stamp)
 mkdirSync(path.join(dir, 'img'), { recursive: true })
 
