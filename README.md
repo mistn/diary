@@ -36,27 +36,29 @@ Secrets 统一配在仓库 **Settings → Secrets and variables → Actions**：
 
 | Secret | 用途 | 必填 |
 |---|---|---|
-| `CLOUDFLARE_API_TOKEN` | 部署 + 备份。用 "Edit Cloudflare Workers" 模板建，再手动加一行：帐户 / D1 / 读取 | ✅ |
-| `CLOUDFLARE_ACCOUNT_ID` | 部署 + 备份。Cloudflare 后台链接里那串 account id | ✅ |
+| `CLOUDFLARE_API_TOKEN` | 部署。用 "Edit Cloudflare Workers" 模板建 | ✅ |
+| `CLOUDFLARE_ACCOUNT_ID` | 部署。Cloudflare 后台链接里那串 account id | ✅ |
 | `ADMIN_PASSWORD` | 后台登录密码，deploy.yml 自动同步为 Worker secret（printf 传，别带换行） | ✅ |
 | `TURNSTILE_SECRET` | 登录人机校验，deploy.yml 自动同步 | ✅ |
-| `WEBDAV_URL` / `WEBDAV_USERNAME` / `WEBDAV_PASSWORD` | 每周自动备份到 WebDAV（backup.yml）；URL 末尾不要斜杠 | ✅ |
 | `CF_ANALYTICS_TOKEN` | Cloudflare Web Analytics 统计脚本，deploy.yml 检测到才同步；不配则站上无统计 | ⭕ 可选 |
 
 首次建站：`npx wrangler d1 create weekly`（id 填进 `wrangler.toml`）+ `npx wrangler r2 bucket create diary-img`，表由代码 `ensure()` 自动建。
 
 ## 备份
 
-- 本地：`pnpm run backup`，产物在 `backup/YYYY-MM-DD/`（不进 git）
-- 云端：每周一 02:00 自动备到 WebDAV，只留最近 8 份
+不做自动备份。误删靠 D1 Time Travel 回滚（默认保留最近 30 天，以账号套餐为准）：
+
+```bash
+npx wrangler d1 time-travel restore weekly --timestamp=2026-10-27T10:00:00Z
+```
+
+R2 里的图片没有版本历史，删了就是删了，原图请留在本地。
 
 ## 目录
 
 ```
 src/index.ts                  # 路由 + 渲染 + 上传/预览
-scripts/backup.mjs            # 本地备份
 .github/workflows/deploy.yml  # 自动部署
-.github/workflows/backup.yml  # 云端备份
 wrangler.toml                 # Worker + D1 + R2
 seed.sql                      # 示例数据
 icons/                        # PWA 图标源文件（已上传 R2 pwa/）

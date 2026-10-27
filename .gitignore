@@ -2,4 +2,5 @@ node_modules
 .dev.vars
 .wrangler
 dist
+# 旧的本地备份目录，保留忽略规则，防止残留的日记导出被误提交
 backup/

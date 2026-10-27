@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "backup": "node scripts/backup.mjs",
     "cf:db": "wrangler d1 create weekly"
   },
   "dependencies": {
