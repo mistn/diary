@@ -13,7 +13,7 @@
 - PWA：`/manifest.webmanifest` + `/sw.js`，手机浏览器打开可“安装到主屏幕”，页面与图片离线可读；缓存有上限（40 个页面 + 120 张图，单图 ≤500KB，FIFO 淘汰，搜索页与分页不进缓存，`/admin` `/api` 完全不进 SW），改缓存逻辑记得 bump `V`
 - 图标：favicon 与 PWA 图标为 Happy Sugar Life 头像，走 Workers 静态资源（`public/` 随仓库提交、随部署上线，不依赖 R2）；`node gen-icons.cjs <头像路径>` 可再生成
 - 时区：站点所有「今天」与时间显示统一按北京时间（UTC+8），DB 里仍存 UTC ISO，展示时换算
-- 留言：`/guestbook` 访客留言板（公开即显；Turnstile 人机验证 + 同 IP 60 秒 1 条 / 24 小时 10 条限速 + 蜜罐字段，IP 只存哈希），管理员可删。访客也能自删（提交时下发一次性 token，库里只存 `sha256`，本机 `localStorage` 记住 → 列表里自己那条多一个「删除」，成功页也给一个删除按钮，换设备/清缓存即失效）。输出走独立消毒档：只保留站内 `/img/` 图片（外链图一律丢弃，防追踪像素）、链接强制 `rel="nofollow ugc noopener noreferrer"`；线上未配 `TURNSTILE_SECRET` 一律拒绝（本地 localhost 放行便于调试）
+- 留言：`/guestbook` 访客留言板（公开即显；Turnstile 人机验证 + 同 IP 60 秒 1 条 / 24 小时 10 条限速 + 蜜罐字段，IP 只存哈希），管理员可删。访客也能自删（提交时下发一次性 token，库里只存哈希，本机 `localStorage` 记住 → 列表里自己那条多一个「删除」，成功页也给一个删除按钮，换设备/清缓存即失效）。输出走独立消毒档：只保留站内 `/img/` 图片（外链图一律丢弃，防追踪像素）、链接强制 `rel="nofollow ugc noopener noreferrer"`；线上未配 `TURNSTILE_SECRET` 一律拒绝（本地 localhost 放行便于调试）
 - 安全：Markdown 输出统一经 sanitize-html 白名单消毒（标签 / 属性 / scheme 三重限制，`javascript:`、事件属性、`iframe`、`style`、`svg` 全剥）；全局响应头 CSP + `nosniff` + `X-Frame-Options: DENY` + `Referrer-Policy`；SQL 全部 D1 预编译 `bind`，搜索 `LIKE` 转义 `% _ \`；所有写操作做 CSRF 来源校验（`Origin` / `Sec-Fetch-Site`，原生客户端放行）；HSTS（仅 https）+ `Permissions-Policy`；`/admin*` 加 `no-store` + `noindex`，`/img/*` 加 `noindex`；退出登录只认 POST（防 `<img src="/logout">` 强制登出）；留言内容风控（链接 ≤2 个、关键词黑名单、24h 内重复内容拦截、全站 30 条/小时兜底，防代理池换 IP 刷）
 - 主题：黑白极简 + Happy Sugar Life 品牌粉点缀（暗色用原色 `#ee72b2`，浅色链接用加深版 `#d63384` 保证白底可读）；网格底纹、底部微光、列表渐入、胶囊按钮等动效与氛围均参考 `dp-intro-vue`
 - App：原生安卓端在 `diary-android/` 目录，对接 `/api/*`

@@ -116,8 +116,8 @@ const ensure = async (db: D1Database) => {
 }
 
 const getCookie = (c: any, k: string) => (c.req.header('Cookie') || '').split('; ').find((x: string) => x.startsWith(k + '='))?.split('=')[1] || ''
-const sha256 = async (s: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('')
-// 一次性删除 token：32 位 hex，库里只存 sha256，明文只给访客本人
+const hashHex = async (s: string) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('')
+// 一次性删除 token：32 位 hex，库里只存哈希，明文只给访客本人
 const randToken = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('')
 const eqSecret = (a: string, b: string) => {
   const A = new TextEncoder().encode(a), B = new TextEncoder().encode(b)
@@ -130,7 +130,7 @@ const eqSecret = (a: string, b: string) => {
 let pwCache = { pw: '', hash: '' }
 const adminHash = async (pw: string) => {
   if (pwCache.pw === pw && pwCache.hash) return pwCache.hash
-  const h = await sha256(pw)
+  const h = await hashHex(pw)
   pwCache = { pw, hash: h }
   return h
 }
@@ -141,9 +141,9 @@ const isAuth = async (c: any) => {
   const cookie = getCookie(c, 'auth')
   if (cookie && (await eqSecret(cookie, expect))) return true
   const bearer = (c.req.header('Authorization') || '').replace('Bearer ', '')
-  if (bearer && (await eqSecret(await sha256(bearer), expect))) return true
+  if (bearer && (await eqSecret(await hashHex(bearer), expect))) return true
   const x = c.req.header('X-Auth')
-  if (x && (await eqSecret(await sha256(x), expect))) return true
+  if (x && (await eqSecret(await hashHex(x), expect))) return true
   return false
 }
 
@@ -222,7 +222,7 @@ app.post('/login', async c => {
   if (!(await loginGate(c.env.DB, ip))) return c.html(layout('登录', `<p style="color:#c00">尝试次数过多，请 10 分钟后再试</p><p><a href="/login">重试</a></p>`))
   const f = await c.req.parseBody()
   if (!await verifyTurnstile(c, String(f['cf-turnstile-response'] || ''))) return c.html(layout('登录', `<p style="color:#c00">人机校验失败</p><p><a href="/login">重试</a></p>`))
-  if (!(await eqSecret(await sha256(String(f.password || '')), await adminHash(c.env.ADMIN_PASSWORD)))) {
+  if (!(await eqSecret(await hashHex(String(f.password || '')), await adminHash(c.env.ADMIN_PASSWORD)))) {
     await loginFail(c.env.DB, ip)
     return c.html(layout('登录', `<p style="color:#c00">密码错误</p><p><a href="/login">重试</a></p>`))
   }
@@ -334,7 +334,7 @@ app.post('/guestbook', async c => {
   const name = String(f.name || '').trim().slice(0, 20)
   if (!body || body.length > 500) return c.text('invalid', 400)
   const ip = c.req.header('CF-Connecting-IP') || 'local'
-  const iphash = await sha256(ip + ':' + (c.env.ADMIN_PASSWORD || 'gb'))
+  const iphash = await hashHex(ip + ':' + (c.env.ADMIN_PASSWORD || 'gb'))
   if (!await verifyTurnstile(c, String(f['cf-turnstile-response'] || ''))) return c.html(layout('留言', `<p style="color:#c00">人机校验失败</p><p><a href="/guestbook">重试</a></p>`), 403)
   const gate = await gbGate(c.env.DB, iphash)
   if (!gate.ok) return c.html(layout('留言', `<p style="color:#c00">${gate.msg}</p><p><a href="/guestbook">返回</a></p>`), 429)
@@ -342,7 +342,7 @@ app.post('/guestbook', async c => {
   if (mod) return c.html(layout('留言', `<p style="color:#c00">${esc(mod)}</p><p><a href="/guestbook">返回</a></p>`), 400)
   // 访客自删：生成一次性 token，库里只存哈希，明文交给访客浏览器（localStorage + 成功页按钮）
   const token = randToken()
-  const res = await c.env.DB.prepare(`INSERT INTO guestbook (name, body, iphash, created, token_hash) VALUES (?,?,?,?,?)`).bind(name, body, iphash, new Date().toISOString(), await sha256(token)).run() as any
+  const res = await c.env.DB.prepare(`INSERT INTO guestbook (name, body, iphash, created, token_hash) VALUES (?,?,?,?,?)`).bind(name, body, iphash, new Date().toISOString(), await hashHex(token)).run() as any
   const id = String(res?.meta?.last_row_id ?? '')
   return c.html(layout('留言已送出', `<p style="margin:18px 0 12px">留言已送出，谢谢。</p><p style="font-size:13px;color:var(--muted);line-height:2">这台设备上，你刚发的那条后面会多一个「删除」；换了设备或清了浏览器数据就没了，要反悔用下面这个按钮，或者跟我说一声。</p><form method="post" action="/guestbook/selfdelete/${id}" style="margin:20px 0"><input type="hidden" name="t" value="${token}"><button style="border-color:#c00;color:#c00">删除这条留言</button></form><p style="font-size:14px"><a href="/guestbook">返回留言板</a></p><script>try{var o=JSON.parse(localStorage.getItem('gb_own')||'{}');o[${JSON.stringify(id)}]=${JSON.stringify(token)};var k=Object.keys(o);if(k.length>50)delete o[k[0]];localStorage.setItem('gb_own',JSON.stringify(o))}catch(e){}</script>`))
 })
@@ -363,7 +363,7 @@ app.post('/guestbook/selfdelete/:id', async c => {
   if (!t) return c.text('missing token', 400)
   const row = await c.env.DB.prepare(`SELECT token_hash FROM guestbook WHERE id=?`).bind(id).first() as any
   if (!row) return c.html(layout('留言', `<p style="color:#c00">这条留言已经不在了</p><p><a href="/guestbook">返回留言板</a></p>`), 404)
-  if (!row.token_hash || !eqSecret(await sha256(t), String(row.token_hash))) return c.html(layout('留言', `<p style="color:#c00">删除凭证不对，可能不是这台设备发的</p><p><a href="/guestbook">返回留言板</a></p>`), 403)
+  if (!row.token_hash || !eqSecret(await hashHex(t), String(row.token_hash))) return c.html(layout('留言', `<p style="color:#c00">删除凭证不对，可能不是这台设备发的</p><p><a href="/guestbook">返回留言板</a></p>`), 403)
   await c.env.DB.prepare(`DELETE FROM guestbook WHERE id=?`).bind(id).run()
   return c.redirect('/guestbook')
 })
@@ -867,7 +867,7 @@ app.post('/api/login', async c => {
   if (!(await loginGate(c.env.DB, ip))) return c.json({ ok: false, error: 'too many attempts' }, 429)
   if (!await verifyTurnstile(c, String(b['cf-turnstile-response'] || ''))) return c.json({ ok: false, error: 'turnstile' }, 403)
   const p = String(b.password || b.auth || '')
-  if (!(await eqSecret(await sha256(p), await adminHash(c.env.ADMIN_PASSWORD)))) {
+  if (!(await eqSecret(await hashHex(p), await adminHash(c.env.ADMIN_PASSWORD)))) {
     await loginFail(c.env.DB, ip)
     return c.json({ ok: false }, 401)
   }
