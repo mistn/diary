@@ -14,7 +14,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https:",
+  "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' https://challenges.cloudflare.com https://cloudflareinsights.com",
   "frame-src https://challenges.cloudflare.com",
@@ -406,7 +406,14 @@ fi.addEventListener('change', async (e) => {
   try {
     let up = f;
     const wantWebp = document.getElementById('towebp').checked;
-    if (wantWebp && f.type !== 'image/webp' && f.type !== 'image/gif') up = await compress(f);
+    if (wantWebp && f.type !== 'image/webp' && f.type !== 'image/gif') {
+      try { up = await compress(f) } catch (err) {
+        // 压缩失败不再直接阻断上传：浏览器能显示的格式退回原图，其余（HEIC/HEIF 等）给出明确提示
+        var okTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/avif'];
+        if (okTypes.indexOf(f.type) < 0) throw new Error('浏览器解不开这张图（' + (f.type || '未知格式') + '），HEIC/HEIF 请先转成 JPG 再传');
+        up = f;
+      }
+    }
     const fd = new FormData();
     fd.append('file', up, up.name || 'img');
     const r = await fetch('/admin/upload', { method: 'POST', body: fd });
@@ -557,7 +564,14 @@ fi.addEventListener('change', async (e) => {
   try {
     let up = f;
     const wantWebp = document.getElementById('towebp').checked;
-    if (wantWebp && f.type !== 'image/webp' && f.type !== 'image/gif') up = await compress(f);
+    if (wantWebp && f.type !== 'image/webp' && f.type !== 'image/gif') {
+      try { up = await compress(f) } catch (err) {
+        // 压缩失败不再直接阻断上传：浏览器能显示的格式退回原图，其余（HEIC/HEIF 等）给出明确提示
+        var okTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/avif'];
+        if (okTypes.indexOf(f.type) < 0) throw new Error('浏览器解不开这张图（' + (f.type || '未知格式') + '），HEIC/HEIF 请先转成 JPG 再传');
+        up = f;
+      }
+    }
     const fd = new FormData();
     fd.append('file', up, up.name || 'img');
     const r = await fetch('/admin/upload', { method: 'POST', body: fd });
